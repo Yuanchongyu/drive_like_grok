@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>用于根据您的位置规划路线（如「最近的麦当劳」）并打开地图导航。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>需要连接你电脑上运行的后端服务，以便用 AI 解析行程并规划路线。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于录制你的语音，把行程描述转成文字并规划路线。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>用于识别你说的行程内容（如「去学校接孩子再去麦当劳」），并自动填入输入框。</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>comgooglemapsurl</string>
+	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
+</dict>
+</plist>

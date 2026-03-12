@@ -11,6 +11,10 @@
 		E92567562F6118040039DED8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567552F6118040039DED8 /* ContentView.swift */; };
 		E92567582F6118060039DED8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E92567572F6118060039DED8 /* Assets.xcassets */; };
 		E925675B2F6118060039DED8 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E925675A2F6118060039DED8 /* Preview Assets.xcassets */; };
+		E92567632F6120000039DED8 /* GoogleMapsOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567612F6120000039DED8 /* GoogleMapsOpener.swift */; };
+		E92567662F6121000039DED8 /* LocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567642F6121000039DED8 /* LocationProvider.swift */; };
+		E92567672F6121000039DED8 /* TripPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567652F6121000039DED8 /* TripPlanningService.swift */; };
+		E92567692F6122000039DED8 /* VoiceInputHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567682F6122000039DED8 /* VoiceInputHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +23,11 @@
 		E92567552F6118040039DED8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E92567572F6118060039DED8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E925675A2F6118060039DED8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		E92567612F6120000039DED8 /* GoogleMapsOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleMapsOpener.swift; sourceTree = "<group>"; };
+		E92567622F6120000039DED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E92567642F6121000039DED8 /* LocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationProvider.swift; sourceTree = "<group>"; };
+		E92567652F6121000039DED8 /* TripPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanningService.swift; sourceTree = "<group>"; };
+		E92567682F6122000039DED8 /* VoiceInputHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +62,11 @@
 			children = (
 				E92567532F6118040039DED8 /* drive_like_grokApp.swift */,
 				E92567552F6118040039DED8 /* ContentView.swift */,
+				E92567612F6120000039DED8 /* GoogleMapsOpener.swift */,
+				E92567642F6121000039DED8 /* LocationProvider.swift */,
+				E92567652F6121000039DED8 /* TripPlanningService.swift */,
+				E92567682F6122000039DED8 /* VoiceInputHelper.swift */,
+				E92567622F6120000039DED8 /* Info.plist */,
 				E92567572F6118060039DED8 /* Assets.xcassets */,
 				E92567592F6118060039DED8 /* Preview Content */,
 			);
@@ -139,6 +153,10 @@
 			files = (
 				E92567562F6118040039DED8 /* ContentView.swift in Sources */,
 				E92567542F6118040039DED8 /* drive_like_grokApp.swift in Sources */,
+				E92567632F6120000039DED8 /* GoogleMapsOpener.swift in Sources */,
+				E92567662F6121000039DED8 /* LocationProvider.swift in Sources */,
+				E92567672F6121000039DED8 /* TripPlanningService.swift in Sources */,
+				E92567692F6122000039DED8 /* VoiceInputHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,8 +285,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"drive_like_grok/Preview Content\"";
+				DEVELOPMENT_TEAM = H5677R8YRN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = drive_like_grok/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -295,8 +315,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"drive_like_grok/Preview Content\"";
+				DEVELOPMENT_TEAM = H5677R8YRN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = drive_like_grok/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
