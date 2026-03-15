@@ -13,9 +13,15 @@ struct TripPlanResponse: Codable {
     let waypoints: [String]
 }
 
-/// 行程规划服务：根据用户输入和当前位置，返回有序站点
+/// 规划结果：站点列表 + 可选的一句语音回复（给用户听的确认语）
+struct PlanResult {
+    let waypoints: [String]
+    let voiceReply: String?
+}
+
+/// 行程规划服务：根据用户输入和当前位置，返回有序站点及可选的语音回复
 protocol TripPlanningService {
-    func plan(userInput: String, location: CLLocationCoordinate2D?) async throws -> [String]
+    func plan(userInput: String, location: CLLocationCoordinate2D?) async throws -> PlanResult
 }
 
 /// 调用云端后端（含 Gemini）的行程规划
@@ -29,7 +35,7 @@ final class APITripPlanningService: TripPlanningService {
         self.session = session
     }
     
-    func plan(userInput: String, location: CLLocationCoordinate2D?) async throws -> [String] {
+    func plan(userInput: String, location: CLLocationCoordinate2D?) async throws -> PlanResult {
         let url = URL(string: baseURL.hasSuffix("/") ? baseURL + "plan" : baseURL + "/plan")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -51,7 +57,7 @@ final class APITripPlanningService: TripPlanningService {
         }
         
         let decoded = try JSONDecoder().decode(TripPlanResponse.self, from: data)
-        return decoded.waypoints
+        return PlanResult(waypoints: decoded.waypoints, voiceReply: nil)
     }
 }
 

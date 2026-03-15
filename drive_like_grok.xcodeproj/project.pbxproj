@@ -15,6 +15,14 @@
 		E92567662F6121000039DED8 /* LocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567642F6121000039DED8 /* LocationProvider.swift */; };
 		E92567672F6121000039DED8 /* TripPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567652F6121000039DED8 /* TripPlanningService.swift */; };
 		E92567692F6122000039DED8 /* VoiceInputHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567682F6122000039DED8 /* VoiceInputHelper.swift */; };
+		E925676B2F6123000039DED8 /* OnDeviceTripPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E925676A2F6123000039DED8 /* OnDeviceTripPlanningService.swift */; };
+		E925676D2F6124000039DED8 /* ApiKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E925676C2F6124000039DED8 /* ApiKeyStore.swift */; };
+		E925676F2F6124000039DED8 /* ApiKeySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E925676E2F6124000039DED8 /* ApiKeySettingsView.swift */; };
+		E92567712F6125000039DED8 /* VoiceFeedbackHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567702F6125000039DED8 /* VoiceFeedbackHelper.swift */; };
+		E92567722F6126000039DED8 /* GeminiLiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567732F6126000039DED8 /* GeminiLiveService.swift */; };
+		E92567742F6127000039DED8 /* LiveMicCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567752F6127000039DED8 /* LiveMicCapture.swift */; };
+		E92567762F6127000039DED8 /* LiveSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567772F6127000039DED8 /* LiveSessionManager.swift */; };
+		E92567782F6128000039DED8 /* LiveWebSocketNW.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567792F6128000039DED8 /* LiveWebSocketNW.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +36,14 @@
 		E92567642F6121000039DED8 /* LocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationProvider.swift; sourceTree = "<group>"; };
 		E92567652F6121000039DED8 /* TripPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanningService.swift; sourceTree = "<group>"; };
 		E92567682F6122000039DED8 /* VoiceInputHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputHelper.swift; sourceTree = "<group>"; };
+		E925676A2F6123000039DED8 /* OnDeviceTripPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTripPlanningService.swift; sourceTree = "<group>"; };
+		E925676C2F6124000039DED8 /* ApiKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyStore.swift; sourceTree = "<group>"; };
+		E925676E2F6124000039DED8 /* ApiKeySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeySettingsView.swift; sourceTree = "<group>"; };
+		E92567702F6125000039DED8 /* VoiceFeedbackHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceFeedbackHelper.swift; sourceTree = "<group>"; };
+		E92567732F6126000039DED8 /* GeminiLiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiLiveService.swift; sourceTree = "<group>"; };
+		E92567752F6127000039DED8 /* LiveMicCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMicCapture.swift; sourceTree = "<group>"; };
+		E92567772F6127000039DED8 /* LiveSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSessionManager.swift; sourceTree = "<group>"; };
+		E92567792F6128000039DED8 /* LiveWebSocketNW.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWebSocketNW.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +82,14 @@
 				E92567642F6121000039DED8 /* LocationProvider.swift */,
 				E92567652F6121000039DED8 /* TripPlanningService.swift */,
 				E92567682F6122000039DED8 /* VoiceInputHelper.swift */,
+				E925676A2F6123000039DED8 /* OnDeviceTripPlanningService.swift */,
+				E925676C2F6124000039DED8 /* ApiKeyStore.swift */,
+				E925676E2F6124000039DED8 /* ApiKeySettingsView.swift */,
+				E92567702F6125000039DED8 /* VoiceFeedbackHelper.swift */,
+				E92567732F6126000039DED8 /* GeminiLiveService.swift */,
+				E92567752F6127000039DED8 /* LiveMicCapture.swift */,
+				E92567772F6127000039DED8 /* LiveSessionManager.swift */,
+				E92567792F6128000039DED8 /* LiveWebSocketNW.swift */,
 				E92567622F6120000039DED8 /* Info.plist */,
 				E92567572F6118060039DED8 /* Assets.xcassets */,
 				E92567592F6118060039DED8 /* Preview Content */,
@@ -157,6 +181,14 @@
 				E92567662F6121000039DED8 /* LocationProvider.swift in Sources */,
 				E92567672F6121000039DED8 /* TripPlanningService.swift in Sources */,
 				E92567692F6122000039DED8 /* VoiceInputHelper.swift in Sources */,
+				E925676B2F6123000039DED8 /* OnDeviceTripPlanningService.swift in Sources */,
+				E925676D2F6124000039DED8 /* ApiKeyStore.swift in Sources */,
+				E925676F2F6124000039DED8 /* ApiKeySettingsView.swift in Sources */,
+				E92567712F6125000039DED8 /* VoiceFeedbackHelper.swift in Sources */,
+				E92567722F6126000039DED8 /* GeminiLiveService.swift in Sources */,
+				E92567742F6127000039DED8 /* LiveMicCapture.swift in Sources */,
+				E92567762F6127000039DED8 /* LiveSessionManager.swift in Sources */,
+				E92567782F6128000039DED8 /* LiveWebSocketNW.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -18,9 +18,11 @@ final class VoiceInputHelper: NSObject, ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
     private var resultContinuation: CheckedContinuation<String?, Error>?  // used with resume(returning:) or resume(throwing:)
+    /// 避免 1101 等错误被多次回调时重复处理、刷屏
+    private var didFinishWithError = false
 
     private let speechRecognizer: SFSpeechRecognizer? = {
-        // 优先中文，也支持英文
+        // 优先中文，方便说「去学校接孩子然后去麦当劳」
         if let zh = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")) { return zh }
         if let en = SFSpeechRecognizer(locale: Locale(identifier: "en-US")) { return en }
         return SFSpeechRecognizer()
@@ -66,6 +68,7 @@ final class VoiceInputHelper: NSObject, ObservableObject {
         }
         if isListening { return }
         cancelCurrentTask()
+        didFinishWithError = false
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -95,7 +98,11 @@ final class VoiceInputHelper: NSObject, ObservableObject {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, err in
             guard let self else { return }
             if let err = err {
-                Task { @MainActor in self.finishWithError(err) }
+                Task { @MainActor in
+                    guard !self.didFinishWithError else { return }
+                    self.didFinishWithError = true
+                    self.finishWithError(err)
+                }
                 return
             }
             if let result = result, result.isFinal {
@@ -148,7 +155,12 @@ final class VoiceInputHelper: NSObject, ObservableObject {
     private func finishWithError(_ error: Error) {
         isListening = false
         cancelCurrentTask()
-        errorMessage = error.localizedDescription
+        let ns = error as NSError
+        if ns.code == 1101 || (ns.domain.contains("Assistant") && ns.code == 1101) {
+            errorMessage = "语音识别服务不可用，请检查：设置→隐私与安全性→语音识别 已开启，或稍后重试"
+        } else {
+            errorMessage = error.localizedDescription
+        }
         resultContinuation?.resume(throwing: error)
         resultContinuation = nil
     }
