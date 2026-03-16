@@ -1,3 +1,6 @@
+[![English](https://img.shields.io/badge/English-README-blue)](./README.en.md)
+[![简体中文](https://img.shields.io/badge/简体中文-当前-green)](./README.md)
+
 # Drive like Grok
 
 用自然语言说一段行程，AI 解析后按顺序打开地图导航。现在支持两种模式：
