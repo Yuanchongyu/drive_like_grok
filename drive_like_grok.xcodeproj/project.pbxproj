@@ -23,6 +23,7 @@
 		E92567742F6127000039DED8 /* LiveMicCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567752F6127000039DED8 /* LiveMicCapture.swift */; };
 		E92567762F6127000039DED8 /* LiveSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567772F6127000039DED8 /* LiveSessionManager.swift */; };
 		E92567782F6128000039DED8 /* LiveWebSocketNW.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92567792F6128000039DED8 /* LiveWebSocketNW.swift */; };
+		E925677A2F6129000039DED8 /* Branding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E925677B2F6129000039DED8 /* Branding.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +45,7 @@
 		E92567752F6127000039DED8 /* LiveMicCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMicCapture.swift; sourceTree = "<group>"; };
 		E92567772F6127000039DED8 /* LiveSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSessionManager.swift; sourceTree = "<group>"; };
 		E92567792F6128000039DED8 /* LiveWebSocketNW.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWebSocketNW.swift; sourceTree = "<group>"; };
+		E925677B2F6129000039DED8 /* Branding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Branding.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 				E92567752F6127000039DED8 /* LiveMicCapture.swift */,
 				E92567772F6127000039DED8 /* LiveSessionManager.swift */,
 				E92567792F6128000039DED8 /* LiveWebSocketNW.swift */,
+				E925677B2F6129000039DED8 /* Branding.swift */,
 				E92567622F6120000039DED8 /* Info.plist */,
 				E92567572F6118060039DED8 /* Assets.xcassets */,
 				E92567592F6118060039DED8 /* Preview Content */,
@@ -189,6 +192,7 @@
 				E92567742F6127000039DED8 /* LiveMicCapture.swift in Sources */,
 				E92567762F6127000039DED8 /* LiveSessionManager.swift in Sources */,
 				E92567782F6128000039DED8 /* LiveWebSocketNW.swift in Sources */,
+				E925677A2F6129000039DED8 /* Branding.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

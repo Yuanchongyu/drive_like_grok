@@ -83,7 +83,7 @@ final class VoiceInputHelper: NSObject, ObservableObject {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            try? self?.recognitionRequest?.append(buffer)
+            self?.recognitionRequest?.append(buffer)
         }
         do {
             audioEngine.prepare()

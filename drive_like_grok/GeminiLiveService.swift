@@ -25,11 +25,14 @@ protocol GeminiLiveServiceDelegate: AnyObject {
     /// 可选：用户/模型转写（调试或 UI）
     func geminiLive(_ service: GeminiLiveService, inputTranscription: String?)
     func geminiLive(_ service: GeminiLiveService, outputTranscription: String?)
+    /// 当前模型轮次是否已完成，可用于抑制“短暂掉空被误判成说完”
+    func geminiLive(_ service: GeminiLiveService, modelTurnStateChanged isComplete: Bool)
 }
 
 extension GeminiLiveServiceDelegate {
     func geminiLive(_ service: GeminiLiveService, inputTranscription: String?) {}
     func geminiLive(_ service: GeminiLiveService, outputTranscription: String?) {}
+    func geminiLive(_ service: GeminiLiveService, modelTurnStateChanged isComplete: Bool) {}
 }
 
 /// 仅用于 checkLiveConnectivity：要求连接进入 connected 后再稳定一小段时间，避免“假成功”
@@ -75,8 +78,14 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     private var configSent = false
     private var pendingSystemInstruction: String?
     private var pendingEnableAffectiveDialog: Bool = false
+    private var pendingEnableNearbyDiscovery: Bool = false
+    private var isDisconnecting = false
 
     weak var delegate: GeminiLiveServiceDelegate?
+
+    private func log(_ message: String) {
+        print("[GeminiLiveService] \(message)")
+    }
 
     enum ConnectionState {
         case disconnected
@@ -157,6 +166,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
         service.connect(
             systemInstruction: "You are a test.",
             enableAffectiveDialog: enableAffectiveDialog,
+            enableNearbyDiscovery: false,
             forceIPv4: forceIPv4,
             useURLSession: useURLSession
         )
@@ -211,11 +221,20 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     /// - Parameters:
     ///   - forceIPv4: 仅 Network 方式时有效；REST 通但 Live 连不上可传 false
     ///   - useURLSession: 为 true 时用系统 URLSession 建连（与 REST 同栈），Network 连不上时可试
-    func connect(systemInstruction: String, enableAffectiveDialog: Bool = false, forceIPv4: Bool = true, useURLSession: Bool = false) {
+    func connect(
+        systemInstruction: String,
+        enableAffectiveDialog: Bool = false,
+        enableNearbyDiscovery: Bool = false,
+        forceIPv4: Bool = true,
+        useURLSession: Bool = false
+    ) {
         guard nwSocket == nil, webSocketTask == nil else { return }
+        log("connect useURLSession=\(useURLSession) useV1Alpha=\(useV1Alpha) affective=\(enableAffectiveDialog)")
         pendingSystemInstruction = systemInstruction
         pendingEnableAffectiveDialog = enableAffectiveDialog
+        pendingEnableNearbyDiscovery = enableNearbyDiscovery
         configSent = false
+        isDisconnecting = false
 
         Task { @MainActor in
             delegate?.geminiLive(self, connectionStateChanged: .connecting)
@@ -263,15 +282,19 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     }
 
     func disconnect() {
+        log("disconnect")
+        isDisconnecting = true
         receiveTask?.cancel()
         receiveTask = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
+        session?.invalidateAndCancel()
         session = nil
         nwSocket?.disconnect()
         nwSocket = nil
         configSent = false
         pendingSystemInstruction = nil
+        pendingEnableNearbyDiscovery = false
         Task { @MainActor in
             delegate?.geminiLive(self, connectionStateChanged: .disconnected)
         }
@@ -288,11 +311,18 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        log("websocket didOpen")
         sendPendingConfigAndNotify()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if isDisconnecting {
+            log("urlSession didComplete during disconnect")
+            Task { @MainActor in delegate?.geminiLive(self, connectionStateChanged: .disconnected) }
+            return
+        }
         if let e = error {
+            log("urlSession didComplete error=\(e.localizedDescription)")
             let msg = connectionErrorMessage(e)
             Task { @MainActor in delegate?.geminiLive(self, connectionStateChanged: .failed(msg)) }
         }
@@ -301,6 +331,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     /// WebSocket 打开后发 setup；真正 connected 以服务端 setupComplete 为准
     private func sendPendingConfigAndNotify() {
         guard let instruction = pendingSystemInstruction else { return }
+        log("send setup")
         var setup: [String: Any] = [
             "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
             "generationConfig": [
@@ -318,16 +349,33 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
         if useV1Alpha && pendingEnableAffectiveDialog {
             setup["enableAffectiveDialog"] = true
         }
-        setup["tools"] = [[
-            "functionDeclarations": [[
-                "name": "plan_route",
-                "description": "根据用户说的站点顺序规划驾车路线并打开地图。站点按用户说的顺序排列。",
+        var functionDeclarations: [[String: Any]] = [[
+            "name": "plan_route",
+            "description": "当用户提出任何具体导航、路线、多站点出行请求时，必须首先调用此工具。不要先说正在规划路线。站点必须按用户原话顺序排列。",
+            "parameters": [
+                "type": "object",
+                "properties": ["waypoints": ["type": "array", "items": ["type": "string"], "description": "按顺序的站点名称或地址"] as [String: Any]] as [String: Any],
+                "required": ["waypoints"]
+            ] as [String: Any]
+        ] as [String: Any]]
+        if pendingEnableNearbyDiscovery {
+            functionDeclarations.append([
+                "name": "search_nearby_places",
+                "description": "当用户还没有确定具体目的地，只是想找附近推荐，比如附近评分高的餐厅、咖啡馆、健身房或商场时，先调用此工具，不要直接导航。",
                 "parameters": [
                     "type": "object",
-                    "properties": ["waypoints": ["type": "array", "items": ["type": "string"], "description": "按顺序的站点名称或地址"] as [String: Any]] as [String: Any],
-                    "required": ["waypoints"]
+                    "properties": [
+                        "query": ["type": "string", "description": "用户想找的类别或关键词，例如日料店、咖啡馆、健身房"] as [String: Any],
+                        "radiusMeters": ["type": "integer", "description": "搜索半径，默认 5000，通常不超过 10000"] as [String: Any],
+                        "maxResults": ["type": "integer", "description": "返回候选数量，通常填 3"] as [String: Any],
+                        "sortBy": ["type": "string", "enum": ["rating", "distance"], "description": "按评分或距离排序"] as [String: Any]
+                    ] as [String: Any],
+                    "required": ["query"]
                 ] as [String: Any]
-            ] as [String: Any]]
+            ] as [String: Any])
+        }
+        setup["tools"] = [[
+            "functionDeclarations": functionDeclarations
         ] as [String: Any]]
         guard let data = try? JSONSerialization.data(withJSONObject: ["setup": setup]),
               let text = String(data: data, encoding: .utf8) else { return }
@@ -360,7 +408,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
 
     /// 用户停止说话时调用（若 API 支持可发 audioStreamEnd）
     func sendAudioStreamEnd() {
-        guard configSent else { return }
+        guard configSent, !isDisconnecting else { return }
         let message: [String: Any] = [
             "realtimeInput": [
                 "audioStreamEnd": true
@@ -370,7 +418,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     }
 
     func sendActivityStart() {
-        guard configSent else { return }
+        guard configSent, !isDisconnecting else { return }
         let message: [String: Any] = [
             "realtimeInput": [
                 "activityStart": [:] as [String: Any]
@@ -380,7 +428,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     }
 
     func sendActivityEnd() {
-        guard configSent else { return }
+        guard configSent, !isDisconnecting else { return }
         let message: [String: Any] = [
             "realtimeInput": [
                 "activityEnd": [:] as [String: Any]
@@ -391,6 +439,8 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
 
     /// 回复工具调用结果
     func sendToolResponse(callId: String, name: String, result: [String: Any]) {
+        guard !isDisconnecting else { return }
+        log("sendToolResponse name=\(name) callId=\(callId) result=\(result)")
         let message: [String: Any] = [
             "toolResponse": [
                 "functionResponses": [[
@@ -406,12 +456,17 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
     // MARK: - Private
 
     private func sendJSON(_ obj: [String: Any]) {
+        guard !isDisconnecting else { return }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let text = String(data: data, encoding: .utf8) else { return }
         sendText(text)
     }
 
     private func sendText(_ text: String, completion: ((Error?) -> Void)? = nil) {
+        guard !isDisconnecting else {
+            completion?(nil)
+            return
+        }
         if let ws = nwSocket {
             ws.send(text: text, completion: completion)
             return
@@ -460,6 +515,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
 
         if json["setupComplete"] != nil {
+            log("received setupComplete")
             configSent = true
             pendingSystemInstruction = nil
             delegate?.geminiLive(self, connectionStateChanged: .connected)
@@ -467,7 +523,15 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
         }
 
         if let serverContent = json["serverContent"] as? [String: Any] {
+            if serverContent["generationComplete"] as? Bool == true || serverContent["turnComplete"] as? Bool == true {
+                log("serverContent turn complete")
+                delegate?.geminiLive(self, modelTurnStateChanged: true)
+            } else if serverContent["modelTurn"] != nil {
+                log("serverContent modelTurn")
+                delegate?.geminiLive(self, modelTurnStateChanged: false)
+            }
             if serverContent["interrupted"] as? Bool == true {
+                log("serverContent interrupted")
                 delegate?.geminiLiveDidInterrupt(self)
             }
             if let modelTurn = serverContent["modelTurn"] as? [String: Any],
@@ -496,6 +560,7 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
                 let name = fc["name"] as? String ?? ""
                 let callId = fc["id"] as? String ?? UUID().uuidString
                 let args = fc["args"] as? [String: Any] ?? [:]
+                log("received toolCall name=\(name) callId=\(callId) args=\(args)")
                 delegate?.geminiLive(self, toolCall: name, arguments: args, callId: callId)
             }
         }
@@ -507,25 +572,36 @@ final class GeminiLiveService: NSObject, URLSessionWebSocketDelegate, URLSession
 /// 播放 Live API 返回的 24kHz 16-bit 单声道 PCM；收到打断时清空队列并停止
 final class LiveAudioPlayer {
     private let engine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
+    private lazy var sourceNode = AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList -> OSStatus in
+        guard let self else {
+            Self.zeroAudioBufferList(audioBufferList, frameCount: Int(frameCount))
+            return noErr
+        }
+        self.render(into: audioBufferList, frameCount: Int(frameCount))
+        return noErr
+    }
     /// Live API 原始输出格式（24kHz Int16 PCM）
     private let sourceFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: true)!
     private var outputFormat: AVAudioFormat!
     private var converter: AVAudioConverter?
     private let queue = DispatchQueue(label: "live.audio.queue")
-    private var buffers: [AVAudioPCMBuffer] = []
     private var pendingPCM = Data()
-    private var isPlaying = false
     private var engineStarted = false
-    private var hasPrimedPlayback = false
     private var isOutputActive = false
-    /// 抖动缓冲：每块约 100ms，首次播放前预缓冲 2 块，减少碎片化调度造成的卡顿
-    private let chunkFrames: UInt32 = 2400
-    private let minimumStartBuffers = 2
+    private let ringLock = NSLock()
+    private var ringBuffer: [Float] = Array(repeating: 0, count: 48000 * 20)
+    private var readIndex = 0
+    private var writeIndex = 0
+    private var bufferedFrameCount = 0
+    private var playbackPrimed = false
+    private var hasStartedPlayback = false
+    /// 连续流式播放：切更小块，首播缓冲更足，续播阈值更低，避免每次掉到 0 又重新等大缓冲
+    private let chunkFrames: UInt32 = 1200
+    private let initialStartFrames = 16800
+    private let resumeStartFrames = 2400
     var onPlaybackStateChanged: ((Bool) -> Void)?
 
     init() {
-        engine.attach(playerNode)
         // 不在 init 里 prepare/connect/start，否则启动时音频会话未就绪会崩 (inputNode/outputNode 断言)
         // 全部延后到首次播放时在 ensureEngineStarted() 里执行
     }
@@ -539,10 +615,11 @@ final class LiveAudioPlayer {
         try? session.setPreferredSampleRate(48000)
         try? session.setPreferredIOBufferDuration(0.01)
         try? session.setActive(true)
-        // AVAudioEngine 的 mixer 更稳定接受 Float32 / non-interleaved
-        outputFormat = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)
+        engine.attach(sourceNode)
+        // 用设备首选采样率，减少不必要的格式不匹配
+        outputFormat = AVAudioFormat(standardFormatWithSampleRate: session.sampleRate, channels: 1)
         converter = AVAudioConverter(from: sourceFormat, to: outputFormat)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: outputFormat)
+        engine.connect(sourceNode, to: engine.mainMixerNode, format: outputFormat)
         engine.prepare()
         try? engine.start()
     }
@@ -554,7 +631,6 @@ final class LiveAudioPlayer {
             self.ensureEngineStarted()
             self.pendingPCM.append(pcmData)
             self.drainPendingPCM()
-            self.scheduleNextIfNeeded()
         }
     }
 
@@ -563,21 +639,23 @@ final class LiveAudioPlayer {
         while pendingPCM.count >= chunkBytes {
             let chunk = Data(pendingPCM.prefix(chunkBytes))
             pendingPCM.removeFirst(chunkBytes)
-            if let buffer = makeBuffer(from: chunk) {
-                buffers.append(buffer)
+            if let samples = convertToSamples(from: chunk) {
+                append(samples: samples)
             }
         }
-        // 流式尾块：已有缓冲可播时，也允许把不足一块的尾部尽快送出去，减少停顿
-        if !buffers.isEmpty, !pendingPCM.isEmpty, pendingPCM.count >= chunkBytes / 4 {
+        // 尾块策略：只要已经有一定缓冲，就把剩余小块也尽快送入 ring buffer，避免语音断裂
+        let bufferedFrames = currentBufferedFrames()
+        let shouldFlushTail = hasStartedPlayback ? (pendingPCM.count >= 256) : (bufferedFrames >= initialStartFrames / 2 && pendingPCM.count >= chunkBytes / 4)
+        if shouldFlushTail {
             let chunk = pendingPCM
             pendingPCM.removeAll(keepingCapacity: true)
-            if let buffer = makeBuffer(from: chunk) {
-                buffers.append(buffer)
+            if let samples = convertToSamples(from: chunk) {
+                append(samples: samples)
             }
         }
     }
 
-    private func makeBuffer(from pcmData: Data) -> AVAudioPCMBuffer? {
+    private func convertToSamples(from pcmData: Data) -> [Float]? {
         let frameCount = UInt32(pcmData.count / 2)
         guard frameCount > 0 else { return nil }
         if let conv = converter {
@@ -604,61 +682,146 @@ final class LiveAudioPlayer {
                 status.pointee = .noDataNow
                 return nil
             })
-            guard err == nil, outBuf.frameLength > 0 else { return nil }
-            return outBuf
+            guard err == nil, outBuf.frameLength > 0, let ch = outBuf.floatChannelData?[0] else { return nil }
+            let count = Int(outBuf.frameLength)
+            return Array(UnsafeBufferPointer(start: ch, count: count))
         }
 
-        guard let buf = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: frameCount) else { return nil }
-        buf.frameLength = frameCount
-        if let ch = buf.floatChannelData?[0] {
-            pcmData.withUnsafeBytes { raw in
-                let src = raw.bindMemory(to: Int16.self)
-                for i in 0..<Int(frameCount) {
-                    ch[i] = Float(src[i]) / 32768.0
-                }
+        var out = Array(repeating: Float.zero, count: Int(frameCount))
+        pcmData.withUnsafeBytes { raw in
+            let src = raw.bindMemory(to: Int16.self)
+            for i in 0..<Int(frameCount) {
+                out[i] = Float(src[i]) / 32768.0
             }
         }
-        return buf
+        return out
+    }
+
+    private func append(samples: [Float]) {
+        guard !samples.isEmpty else { return }
+        ringLock.lock()
+        defer { ringLock.unlock() }
+
+        let capacity = ringBuffer.count
+        if samples.count >= capacity {
+            let tail = samples.suffix(capacity)
+            for sample in tail {
+                ringBuffer[writeIndex] = sample
+                writeIndex = (writeIndex + 1) % capacity
+            }
+            readIndex = writeIndex
+            bufferedFrameCount = capacity
+            playbackPrimed = false
+            hasStartedPlayback = true
+            updateOutputActiveLocked()
+            return
+        }
+
+        let overflow = max(0, bufferedFrameCount + samples.count - capacity)
+        if overflow > 0 {
+            readIndex = (readIndex + overflow) % capacity
+            bufferedFrameCount -= overflow
+        }
+
+        for sample in samples {
+            ringBuffer[writeIndex] = sample
+            writeIndex = (writeIndex + 1) % capacity
+        }
+        bufferedFrameCount += samples.count
+        updateOutputActiveLocked()
+    }
+
+    private func currentBufferedFrames() -> Int {
+        ringLock.lock()
+        defer { ringLock.unlock() }
+        return bufferedFrameCount
+    }
+
+    func estimatedBufferedDuration() -> TimeInterval {
+        ringLock.lock()
+        let frames = bufferedFrameCount
+        let sampleRate = outputFormat?.sampleRate ?? 48000
+        ringLock.unlock()
+        guard sampleRate > 0 else { return 0 }
+        return Double(frames) / sampleRate
     }
 
     /// 打断：清空未播放并停止
     func interrupt() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.buffers.removeAll()
             self.pendingPCM.removeAll(keepingCapacity: true)
-            self.isPlaying = false
-            self.hasPrimedPlayback = false
+            self.ringLock.lock()
+            self.readIndex = 0
+            self.writeIndex = 0
+            self.bufferedFrameCount = 0
+            self.playbackPrimed = false
+            self.hasStartedPlayback = false
+            self.ringLock.unlock()
             self.updateOutputActive(false)
-            let node = self.playerNode
-            Task { @MainActor in
-                node.stop()
-            }
         }
     }
 
-    private func scheduleNextIfNeeded() {
-        guard !buffers.isEmpty, !isPlaying else {
-            if buffers.isEmpty, !isPlaying {
-                updateOutputActive(false)
-            }
-            return
-        }
-        if !hasPrimedPlayback && buffers.count < minimumStartBuffers {
-            return
-        }
-        let buffer = buffers.removeFirst()
-        isPlaying = true
-        updateOutputActive(true)
-        playerNode.scheduleBuffer(buffer) { [weak self] in
-            self?.queue.async {
-                self?.isPlaying = false
-                self?.scheduleNextIfNeeded()
+    private func render(into audioBufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: Int) {
+        let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+        guard !buffers.isEmpty else { return }
+
+        for buffer in buffers {
+            guard let mData = buffer.mData else { continue }
+            let ptr = mData.bindMemory(to: Float.self, capacity: frameCount)
+            for i in 0..<frameCount {
+                ptr[i] = 0
             }
         }
-        if playerNode.isPlaying == false {
-            hasPrimedPlayback = true
-            playerNode.play()
+
+        ringLock.lock()
+        defer {
+            updateOutputActiveLocked()
+            ringLock.unlock()
+        }
+
+        if !playbackPrimed {
+            let requiredFrames = hasStartedPlayback ? resumeStartFrames : initialStartFrames
+            if bufferedFrameCount < requiredFrames {
+                return
+            }
+            playbackPrimed = true
+            hasStartedPlayback = true
+        }
+
+        let framesToRead = min(frameCount, bufferedFrameCount)
+        guard framesToRead > 0 else {
+            return
+        }
+
+        guard let firstBufferData = buffers[0].mData else { return }
+        let firstChannelPointer = firstBufferData.bindMemory(to: Float.self, capacity: frameCount)
+
+        for i in 0..<framesToRead {
+            firstChannelPointer[i] = ringBuffer[readIndex]
+            readIndex = (readIndex + 1) % ringBuffer.count
+        }
+        bufferedFrameCount -= framesToRead
+
+        for index in 1..<buffers.count {
+            guard let mData = buffers[index].mData else { continue }
+            let ptr = mData.bindMemory(to: Float.self, capacity: frameCount)
+            for i in 0..<framesToRead {
+                ptr[i] = firstChannelPointer[i]
+            }
+        }
+
+        if bufferedFrameCount == 0 {
+            playbackPrimed = false
+        }
+    }
+
+    private func updateOutputActiveLocked() {
+        let active = playbackPrimed && bufferedFrameCount > 0
+        guard isOutputActive != active else { return }
+        isOutputActive = active
+        DispatchQueue.main.async { [weak self] in
+            self?.onPlaybackStateChanged?(active)
         }
     }
 
@@ -667,6 +830,17 @@ final class LiveAudioPlayer {
         isOutputActive = active
         DispatchQueue.main.async { [weak self] in
             self?.onPlaybackStateChanged?(active)
+        }
+    }
+
+    private static func zeroAudioBufferList(_ audioBufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: Int) {
+        let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+        for buffer in buffers {
+            guard let mData = buffer.mData else { continue }
+            let ptr = mData.bindMemory(to: Float.self, capacity: frameCount)
+            for i in 0..<frameCount {
+                ptr[i] = 0
+            }
         }
     }
 }

@@ -59,6 +59,12 @@ private func distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double) 
     return R * c
 }
 
+private struct PlaceSearchStrategy {
+    let keyword: String
+    let type: String?
+    let isSupported: Bool
+}
+
 // MARK: - OnDeviceTripPlanningService
 
 /// 在设备上直接调用 Gemini + 可选 Places，不依赖自建后端。
@@ -82,6 +88,63 @@ final class OnDeviceTripPlanningService: TripPlanningService {
             resolved = waypoints
         }
         return PlanResult(waypoints: resolved, voiceReply: voiceReply)
+    }
+
+    func searchNearby(
+        query: String,
+        radiusMeters: Int,
+        maxResults: Int,
+        sortBy: NearbySearchSort,
+        location: CLLocationCoordinate2D?
+    ) async throws -> [NearbyPlaceCandidate] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            throw TripPlanningError.noNearbyResults(query: "当前请求")
+        }
+        guard let location else {
+            throw TripPlanningError.missingLocation
+        }
+        guard let key = placesKey, !key.isEmpty else {
+            throw TripPlanningError.missingPlacesKey
+        }
+
+        let radius = min(max(radiusMeters, 500), 20_000)
+        let limit = min(max(maxResults, 1), 5)
+        let strategy = searchStrategy(for: trimmedQuery)
+        guard strategy.isSupported else {
+            throw TripPlanningError.unsupportedNearbySearch
+        }
+
+        let rawCandidates: [NearbyPlaceCandidate]
+        if let type = strategy.type {
+            rawCandidates = await nearbySearchCandidates(
+                keyword: strategy.keyword,
+                type: type,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                radiusMeters: radius,
+                key: key
+            )
+        } else {
+            rawCandidates = await textSearchCandidates(
+                query: strategy.keyword,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                radiusMeters: radius,
+                key: key
+            )
+        }
+
+        let filtered = rawCandidates.filter { candidate in
+            guard let distanceMeters = candidate.distanceMeters else { return true }
+            return distanceMeters <= radius
+        }
+        let sorted = sortNearbyCandidates(filtered, sortBy: sortBy)
+        let limited = Array(sorted.prefix(limit))
+        guard !limited.isEmpty else {
+            throw TripPlanningError.noNearbyResults(query: trimmedQuery)
+        }
+        return limited
     }
 
     // MARK: - Gemini
@@ -209,6 +272,138 @@ final class OnDeviceTripPlanningService: TripPlanningService {
     }
 
     // MARK: - Places
+
+    private func searchStrategy(for query: String) -> PlaceSearchStrategy {
+        let lower = query.lowercased()
+        if lower.contains("房源") || lower.contains("租房") || lower.contains("apartment") || lower.contains("housing") || lower.contains("real estate") {
+            return PlaceSearchStrategy(keyword: query, type: nil, isSupported: false)
+        }
+        if lower.contains("日料") || lower.contains("寿司") || lower.contains("拉面") || lower.contains("居酒屋") || lower.contains("sushi") || lower.contains("japanese") || lower.contains("ramen") {
+            return PlaceSearchStrategy(keyword: query, type: "restaurant", isSupported: true)
+        }
+        if lower.contains("咖啡") || lower.contains("咖啡馆") || lower.contains("cafe") || lower.contains("coffee") || lower.contains("starbucks") || query.contains("星巴克") {
+            return PlaceSearchStrategy(keyword: query, type: "cafe", isSupported: true)
+        }
+        if lower.contains("健身") || lower.contains("gym") || lower.contains("fitness") {
+            return PlaceSearchStrategy(keyword: query, type: "gym", isSupported: true)
+        }
+        if lower.contains("商场") || lower.contains("购物") || lower.contains("mall") || lower.contains("shopping") {
+            return PlaceSearchStrategy(keyword: query, type: "shopping_mall", isSupported: true)
+        }
+        if lower.contains("超市") || lower.contains("grocery") || lower.contains("supermarket") {
+            return PlaceSearchStrategy(keyword: query, type: "supermarket", isSupported: true)
+        }
+        if lower.contains("餐厅") || lower.contains("restaurant") || lower.contains("吃饭") || lower.contains("饭店") {
+            return PlaceSearchStrategy(keyword: query, type: "restaurant", isSupported: true)
+        }
+        return PlaceSearchStrategy(keyword: query, type: nil, isSupported: true)
+    }
+
+    private func sortNearbyCandidates(_ candidates: [NearbyPlaceCandidate], sortBy: NearbySearchSort) -> [NearbyPlaceCandidate] {
+        candidates.sorted { lhs, rhs in
+            switch sortBy {
+            case .rating:
+                let leftRating = lhs.rating ?? -1
+                let rightRating = rhs.rating ?? -1
+                if leftRating != rightRating { return leftRating > rightRating }
+                let leftRatingsTotal = lhs.userRatingsTotal ?? -1
+                let rightRatingsTotal = rhs.userRatingsTotal ?? -1
+                if leftRatingsTotal != rightRatingsTotal { return leftRatingsTotal > rightRatingsTotal }
+                return (lhs.distanceMeters ?? .max) < (rhs.distanceMeters ?? .max)
+            case .distance:
+                let leftDistance = lhs.distanceMeters ?? .max
+                let rightDistance = rhs.distanceMeters ?? .max
+                if leftDistance != rightDistance { return leftDistance < rightDistance }
+                let leftRating = lhs.rating ?? -1
+                let rightRating = rhs.rating ?? -1
+                if leftRating != rightRating { return leftRating > rightRating }
+                return (lhs.userRatingsTotal ?? -1) > (rhs.userRatingsTotal ?? -1)
+            }
+        }
+    }
+
+    private func nearbySearchCandidates(
+        keyword: String,
+        type: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Int,
+        key: String
+    ) async -> [NearbyPlaceCandidate] {
+        var components = URLComponents(string: "https://maps.googleapis.com/maps/api/place/nearbysearch/json")!
+        components.queryItems = [
+            .init(name: "location", value: "\(latitude),\(longitude)"),
+            .init(name: "radius", value: "\(radiusMeters)"),
+            .init(name: "keyword", value: keyword),
+            .init(name: "type", value: type),
+            .init(name: "key", value: key)
+        ]
+        guard let url = components.url else { return [] }
+        return await fetchNearbyCandidates(from: url, latitude: latitude, longitude: longitude)
+    }
+
+    private func textSearchCandidates(
+        query: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Int,
+        key: String
+    ) async -> [NearbyPlaceCandidate] {
+        var components = URLComponents(string: "https://maps.googleapis.com/maps/api/place/textsearch/json")!
+        components.queryItems = [
+            .init(name: "query", value: query),
+            .init(name: "location", value: "\(latitude),\(longitude)"),
+            .init(name: "radius", value: "\(radiusMeters)"),
+            .init(name: "key", value: key)
+        ]
+        guard let url = components.url else { return [] }
+        return await fetchNearbyCandidates(from: url, latitude: latitude, longitude: longitude)
+    }
+
+    private func fetchNearbyCandidates(from url: URL, latitude: Double, longitude: Double) async -> [NearbyPlaceCandidate] {
+        guard let (data, _) = try? await session.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        if let err = json["error_message"] as? String {
+            print("[Places] 搜索错误：", err)
+            return []
+        }
+        guard let results = json["results"] as? [[String: Any]], !results.isEmpty else { return [] }
+        return results.compactMap { parseNearbyCandidate($0, originLatitude: latitude, originLongitude: longitude) }
+    }
+
+    private func parseNearbyCandidate(
+        _ json: [String: Any],
+        originLatitude: Double,
+        originLongitude: Double
+    ) -> NearbyPlaceCandidate? {
+        let name = (json["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !name.isEmpty else { return nil }
+        let address = ((json["formatted_address"] as? String) ?? (json["vicinity"] as? String) ?? name)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let location = (json["geometry"] as? [String: Any])?["location"] as? [String: Any]
+        let lat = location?["lat"] as? Double
+        let lng = location?["lng"] as? Double
+        let distanceMeters = lat.flatMap { lat in
+            lng.map { lng in
+                Int((distanceKm(lat1: originLatitude, lon1: originLongitude, lat2: lat, lon2: lng) * 1000).rounded())
+            }
+        }
+        let routeTarget: String
+        if let lat, let lng {
+            routeTarget = "\(lat),\(lng)"
+        } else {
+            routeTarget = address
+        }
+        return NearbyPlaceCandidate(
+            id: (json["place_id"] as? String) ?? UUID().uuidString,
+            name: name,
+            address: address,
+            routeTarget: routeTarget,
+            distanceMeters: distanceMeters,
+            rating: json["rating"] as? Double,
+            userRatingsTotal: json["user_ratings_total"] as? Int
+        )
+    }
 
     private func resolveWaypoints(_ waypoints: [String], resolveWithPlaces: [Bool], latitude: Double, longitude: Double) async -> [String] {
         guard let key = placesKey, !key.isEmpty else {

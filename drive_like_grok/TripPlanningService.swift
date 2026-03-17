@@ -19,9 +19,36 @@ struct PlanResult {
     let voiceReply: String?
 }
 
+enum NearbySearchSort: String {
+    case rating
+    case distance
+}
+
+struct NearbyPlaceCandidate {
+    let id: String
+    let name: String
+    let address: String
+    let routeTarget: String
+    let distanceMeters: Int?
+    let rating: Double?
+    let userRatingsTotal: Int?
+}
+
 /// 行程规划服务：根据用户输入和当前位置，返回有序站点及可选的语音回复
 protocol TripPlanningService {
     func plan(userInput: String, location: CLLocationCoordinate2D?) async throws -> PlanResult
+}
+
+extension TripPlanningService {
+    func searchNearby(
+        query: String,
+        radiusMeters: Int,
+        maxResults: Int,
+        sortBy: NearbySearchSort,
+        location: CLLocationCoordinate2D?
+    ) async throws -> [NearbyPlaceCandidate] {
+        throw TripPlanningError.unsupportedNearbySearch
+    }
 }
 
 /// 调用云端后端（含 Gemini）的行程规划
@@ -64,11 +91,19 @@ final class APITripPlanningService: TripPlanningService {
 enum TripPlanningError: LocalizedError {
     case invalidResponse
     case serverError(status: Int, message: String)
+    case unsupportedNearbySearch
+    case missingLocation
+    case missingPlacesKey
+    case noNearbyResults(query: String)
     
     var errorDescription: String? {
         switch self {
         case .invalidResponse: return "无效的服务器响应"
         case .serverError(let s, let m): return "服务器错误 \(s)：\(m)"
+        case .unsupportedNearbySearch: return "当前模式暂不支持附近搜索"
+        case .missingLocation: return "需要当前位置才能搜索附近结果"
+        case .missingPlacesKey: return "附近搜索需要在设置中填写 Google Places API Key"
+        case .noNearbyResults(let query): return "附近没有找到和“\(query)”相关的结果"
         }
     }
 }
